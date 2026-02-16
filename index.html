@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habits App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme"> 
+<div class="app-card">
+    <div id="auth-view" class="content">
+        <h2 style="text-align: center;">Habits Login</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="pass" placeholder="Password">
+        <button class="btn-primary" id="login-btn">Log In</button>
+        <button class="btn-primary" style="background:none; color:var(--text-dim)" id="reg-btn">Sign Up</button>
+    </div>
+
+    <div id="app-view" class="hidden">
+        <div class="top-bar">
+            <span class="icon-btn" id="theme-toggle">🌓</span>
+            <div class="right-icons">
+                <span class="icon-btn" id="show-add-btn">+</span>
+            </div>
+        </div>
+
+        <h1 class="main-title">Habits</h1>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="today">Today</div>
+            <div class="tab" data-tab="week">Weekly</div>
+            <div class="tab" data-tab="month">Overall</div>
+            <div class="tab" data-tab="analytics">Analytics</div>
+        </div>
+
+        <div class="content">
+            <div id="view-today">
+                <div id="add-habit-modal" class="hidden">
+                    <input type="text" id="habit-input" placeholder="Название привычки...">
+                    <button class="btn-primary" id="add-btn">Add Habit</button>
+                </div>
+                <div id="habit-list"></div>
+                <div style="text-align:center; margin-top:20px; color:var(--text-dim)" id="progress-info"></div>
+            </div>
+
+            <div id="view-week" class="hidden"></div>
+            <div id="view-month" class="hidden"></div>
+
+            <div id="view-analytics" class="hidden">
+                <div class="habit-display-card">
+                    <div class="chart-header">
+                        <span>Average Score</span>
+                        <span class="chart-badge">Last 30 Days</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="scoreChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="habit-display-card">
+                    <div class="chart-header">
+                        <span>Habits Completed</span>
+                        <span class="chart-badge" id="total-completed-badge">0 total</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="habit-display-card">
+                    <div class="chart-header">
+                        <span>Consistency Map</span>
+                        <span class="chart-badge" id="heatmap-month-name">Month</span>
+                    </div>
+                    <div class="heatmap-container">
+                        <div class="heatmap-days-header" id="heatmap-header"></div>
+                        <div class="heatmap-grid" id="heatmap-grid"></div>
+                    </div>
+                </div>
+            </div>
+
+            <p id="logout-btn" class="logout-link">Sign Out</p>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
