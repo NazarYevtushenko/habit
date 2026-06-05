@@ -76,13 +76,24 @@ class HabitModel {
     }
 
     onAuth(callback) {
-        return onAuthStateChanged(auth, async (user) => {
-            this.user = user;
-            if (user) await this.startUserSession(user);
-            else this.stopUserSession();
-            callback(user);
-        });
-    }
+    return onAuthStateChanged(auth, async (user) => {
+        this.user = user;
+        if (user) {
+            try {
+                // Пытаемся загрузить данные
+                await this.startUserSession(user);
+            } catch (error) {
+                // Если база данных пока не пускает (правила еще не обновились), 
+                // мы перехватываем ошибку, чтобы код не сломался
+                console.error("Ошибка при работе с БД:", error);
+            }
+        } else {
+            this.stopUserSession();
+        }
+        // Этот коллбэк скрывает экран логина. Теперь он выполнится в любом случае!
+        callback(user); 
+    });
+}
 
     async register(email, password) {
         return createUserWithEmailAndPassword(auth, email, password);
