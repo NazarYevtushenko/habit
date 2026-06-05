@@ -28,13 +28,13 @@ const LEGACY_STORAGE_KEYS = ["habit-main-local-v2", "habit-main-local-v1"];
 const LOCAL_SETTINGS_KEY = "habit-main-settings-v1";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyD9LYpBztKsgNHbOiP_rEcIH8qfIuY59kA",
-    authDomain: "habit-tracket-becca.firebaseapp.com",
-    projectId: "habit-tracket-becca",
-    storageBucket: "habit-tracket-becca.firebasestorage.app",
-    messagingSenderId: "860636563411",
-    appId: "1:860636563411:web:8656f6dea1be846c9c1126",
-    measurementId: "G-4F73KHC1T0"
+  apiKey: "AIzaSyADGhBYM07ZPTC_yYjaAXzdowJNuO_z2bw",
+  authDomain: "habit-4dfbc.firebaseapp.com",
+  projectId: "habit-4dfbc",
+  storageBucket: "habit-4dfbc.firebasestorage.app",
+  messagingSenderId: "1055332478071",
+  appId: "1:1055332478071:web:a593820d8ca27bcec82a72",
+  measurementId: "G-KDP68B7X31"
 };
 
 const app = initializeApp(firebaseConfig);
