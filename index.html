@@ -3,87 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Habits App</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Habits</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="dark-theme"> 
-<div class="app-card">
-    <div id="auth-view" class="content">
-        <h2 style="text-align: center;">Habits Login</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="pass" placeholder="Password">
-        <button class="btn-primary" id="login-btn">Log In</button>
-        <button class="btn-primary" style="background:none; color:var(--text-dim)" id="reg-btn">Sign Up</button>
+<body class="theme-dark">
+<section class="auth-view" id="auth-view">
+    <div class="auth-card">
+        <p class="eyebrow">Аккаунт</p>
+        <h1 class="auth-title">Habits</h1>
+        <form class="auth-form" id="auth-form">
+            <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
+            <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required>
+            <button class="btn-primary" type="submit" id="login-btn">Войти</button>
+            <button class="btn-secondary" type="button" id="register-btn">Создать аккаунт</button>
+        </form>
+        <button class="btn-google" type="button" id="google-btn">G Войти через Google</button>
+        <p class="auth-error" id="auth-error"></p>
     </div>
+</section>
 
-    <div id="app-view" class="hidden">
-        <div class="top-bar">
-            <span class="icon-btn" id="theme-toggle">🌓</span>
-            <div class="right-icons">
-                <span class="icon-btn" id="show-add-btn">+</span>
+<main class="app-shell hidden" id="app-shell">
+    <header class="top-bar">
+        <button class="icon-btn" id="settings-btn" aria-label="Настройки" title="Настройки">☷</button>
+        <div class="top-actions">
+            <button class="icon-btn" id="theme-toggle" aria-label="Сменить тему" title="Сменить тему">◐</button>
+            <button class="icon-btn add-fab" id="show-add-btn" aria-label="Добавить привычку" title="Добавить привычку">+</button>
+        </div>
+    </header>
+
+    <section class="hero">
+        <p class="eyebrow" id="screen-eyebrow">Сегодня</p>
+        <h1 class="main-title" id="screen-title">Habits</h1>
+        <div class="progress-panel">
+            <div>
+                <span class="progress-number" id="completed-count">0</span>
+                <span class="progress-label">completed</span>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+                <span id="progress-bar"></span>
+            </div>
+        </div>
+    </section>
+
+    <section class="content">
+        <div id="view-today" class="view active-view">
+            <div id="habit-list" class="habit-list"></div>
+            <div class="empty-state hidden" id="empty-state">
+                <h2>Добавь первую привычку</h2>
+                <p>Нажми плюс сверху и начни с одной простой задачи на сегодня.</p>
             </div>
         </div>
 
-        <h1 class="main-title">Habits</h1>
-        
-        <div class="tabs">
-            <div class="tab active" data-tab="today">Today</div>
-            <div class="tab" data-tab="week">Weekly</div>
-            <div class="tab" data-tab="month">Overall</div>
-            <div class="tab" data-tab="analytics">Analytics</div>
-        </div>
+        <div id="view-week" class="view hidden"></div>
+        <div id="view-month" class="view hidden"></div>
 
-        <div class="content">
-            <div id="view-today">
-                <div id="add-habit-modal" class="hidden">
-                    <input type="text" id="habit-input" placeholder="Название привычки...">
-                    <button class="btn-primary" id="add-btn">Add Habit</button>
-                </div>
-                <div id="habit-list"></div>
-                <div style="text-align:center; margin-top:20px; color:var(--text-dim)" id="progress-info"></div>
+        <div id="view-analytics" class="view hidden">
+            <div class="stats-grid">
+                <article class="stat-card">
+                    <strong id="best-streak">0</strong>
+                    <span>best streak</span>
+                </article>
+                <article class="stat-card">
+                    <strong id="active-habits">0</strong>
+                    <span>habits</span>
+                </article>
             </div>
 
-            <div id="view-week" class="hidden"></div>
-            <div id="view-month" class="hidden"></div>
-
-            <div id="view-analytics" class="hidden">
-                <div class="habit-display-card">
-                    <div class="chart-header">
-                        <span>Average Score</span>
-                        <span class="chart-badge">Last 30 Days</span>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="scoreChart"></canvas>
-                    </div>
+            <div class="habit-display-card">
+                <div class="chart-header">
+                    <span>Average Score</span>
+                    <span class="chart-badge">Last 30 Days</span>
                 </div>
-
-                <div class="habit-display-card">
-                    <div class="chart-header">
-                        <span>Habits Completed</span>
-                        <span class="chart-badge" id="total-completed-badge">0 total</span>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="activityChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="habit-display-card">
-                    <div class="chart-header">
-                        <span>Consistency Map</span>
-                        <span class="chart-badge" id="heatmap-month-name">Month</span>
-                    </div>
-                    <div class="heatmap-container">
-                        <div class="heatmap-days-header" id="heatmap-header"></div>
-                        <div class="heatmap-grid" id="heatmap-grid"></div>
-                    </div>
+                <div class="chart-container">
+                    <canvas id="scoreChart"></canvas>
                 </div>
             </div>
 
-            <p id="logout-btn" class="logout-link">Sign Out</p>
+            <div class="habit-display-card">
+                <div class="chart-header">
+                    <span>Habits Completed</span>
+                    <span class="chart-badge" id="total-completed-badge">0 total</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+
+            <div class="habit-display-card">
+                <div class="chart-header">
+                    <span>Consistency Map</span>
+                    <span class="chart-badge" id="heatmap-month-name">Month</span>
+                </div>
+                <div class="heatmap-container">
+                    <div class="heatmap-days-header" id="heatmap-header"></div>
+                    <div class="heatmap-grid" id="heatmap-grid"></div>
+                </div>
+            </div>
         </div>
+
+        <div id="view-detail" class="view hidden"></div>
+    </section>
+
+    <nav class="bottom-nav" aria-label="Разделы">
+        <button class="nav-btn active" data-tab="today" aria-label="Сегодня">☰<span>Today</span></button>
+        <button class="nav-btn" data-tab="week" aria-label="Неделя">▥<span>Week</span></button>
+        <button class="nav-btn" data-tab="analytics" aria-label="Аналитика">▮<span>Analytics</span></button>
+        <button class="nav-btn" data-tab="month" aria-label="Обзор">▦<span>Overall</span></button>
+    </nav>
+</main>
+
+<div class="sheet-backdrop hidden" id="sheet-backdrop"></div>
+
+<section class="bottom-sheet hidden" id="habit-sheet" aria-label="Привычка">
+    <form id="habit-form">
+        <div class="sheet-handle"></div>
+        <div class="sheet-head">
+            <h2 id="sheet-title">Новая привычка</h2>
+            <button class="plain-btn" type="button" id="close-sheet">Закрыть</button>
+        </div>
+
+        <label class="field-label" for="habit-name">Название</label>
+        <input type="text" id="habit-name" placeholder="Например, Медитация" autocomplete="off">
+
+        <label class="field-label">Иконка</label>
+        <div class="icon-picker" id="icon-picker"></div>
+
+        <label class="field-label">Цвет</label>
+        <div class="color-picker" id="color-picker"></div>
+
+        <label class="field-label">Дни повторения</label>
+        <div class="weekday-picker" id="weekday-picker"></div>
+
+        <label class="toggle-row">
+            <input type="checkbox" id="reminder-enabled">
+            <span>Напоминание</span>
+        </label>
+        <input type="time" id="reminder-time" value="19:00">
+
+        <button class="btn-primary" type="submit" id="save-habit-btn">Сохранить</button>
+    </form>
+</section>
+
+<section class="settings-panel hidden" id="settings-panel" aria-label="Настройки">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+        <h2>Настройки</h2>
+        <button class="plain-btn" type="button" id="close-settings">Закрыть</button>
     </div>
-</div>
+    <label class="field-label">Тема</label>
+    <div class="theme-picker" id="theme-picker">
+        <button type="button" data-theme="theme-dark">Dark</button>
+        <button type="button" data-theme="theme-graphite">Graphite</button>
+        <button type="button" data-theme="theme-forest">Forest</button>
+        <button type="button" data-theme="theme-light">Light</button>
+    </div>
+    <button class="btn-secondary" type="button" id="test-reminder">Проверить уведомление</button>
+    <button class="btn-danger" type="button" id="logout-btn">Выйти из аккаунта</button>
+    <p class="settings-note" id="notification-status">Уведомления работают, пока приложение открыто.</p>
+</section>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module" src="app.js"></script>
