@@ -55,13 +55,8 @@ const WEEKDAYS = [
 ];
 const DEFAULT_HABITS = [
     { name: "Зарядка для ума", icon: "✦", color: "teal" },
-    { name: "Speakly", icon: "◆", color: "violet" },
-    { name: "Математика", icon: "▣", color: "amber" },
-    { name: "Voice", icon: "◉", color: "blue" },
     { name: "Книга на английском языке", icon: "☆", color: "green" },
-    { name: "Упражнения для глаз", icon: "☼", color: "teal" },
     { name: "Ведение дневника", icon: "✓", color: "rose" },
-    { name: "Медитация", icon: "☾", color: "amber" }
 ];
 
 class HabitModel {
