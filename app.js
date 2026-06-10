@@ -59,6 +59,23 @@ const DEFAULT_HABITS = [
     { name: "Ведение дневника", icon: "✓", color: "rose" },
 ];
 
+const COINS_PER_HABIT = 10;
+const COINS_PER_WATER = 5;
+const WATER_GOAL_GLASSES = 4;
+
+const SHOP_ITEMS = [
+    { id: "audiobook", name: "15 мин аудиокниги", icon: "🎧", cost: 50 },
+    { id: "instagram", name: "15 мин Инстаграм", icon: "📱", cost: 40 },
+    { id: "mcdonalds", name: "Бургер из Макдака", icon: "🍔", cost: 300 },
+    { id: "chips", name: "Чипсы", icon: "🍟", cost: 120 },
+    { id: "youtube", name: "Видео YouTube", icon: "▶", cost: 30 },
+];
+
+const DEFAULT_ACTIVITIES = [
+    { id: "pushups", name: "25 отжиманий", icon: "✦", coins: 20 },
+    { id: "walk", name: "Прогулка 25 мин", icon: "☼", coins: 20 },
+];
+
 class HabitModel {
     constructor() {
         this.user = null;
@@ -68,27 +85,26 @@ class HabitModel {
         this.settingsListeners = [];
         this.unsubscribeHabits = null;
         this.unsubscribeSettings = null;
+        this.gamification = { coins: 0, awardedHabits: {}, bonusActivities: {} };
+        this.gamificationListeners = [];
+        this.unsubscribeGamification = null;
     }
 
     onAuth(callback) {
-    return onAuthStateChanged(auth, async (user) => {
-        this.user = user;
-        if (user) {
-            try {
-                // Пытаемся загрузить данные
-                await this.startUserSession(user);
-            } catch (error) {
-                // Если база данных пока не пускает (правила еще не обновились), 
-                // мы перехватываем ошибку, чтобы код не сломался
-                console.error("Ошибка при работе с БД:", error);
+        return onAuthStateChanged(auth, async (user) => {
+            this.user = user;
+            if (user) {
+                try {
+                    await this.startUserSession(user);
+                } catch (error) {
+                    console.error("Ошибка при работе с БД:", error);
+                }
+            } else {
+                this.stopUserSession();
             }
-        } else {
-            this.stopUserSession();
-        }
-        // Этот коллбэк скрывает экран логина. Теперь он выполнится в любом случае!
-        callback(user); 
-    });
-}
+            callback(user);
+        });
+    }
 
     async register(email, password) {
         return createUserWithEmailAndPassword(auth, email, password);
@@ -109,16 +125,21 @@ class HabitModel {
     async startUserSession(user) {
         await this.ensureUserSeeded(user.uid);
         this.listenHabits(user.uid);
-        this.listenSettings(user.uid);
+        this.subscribeToSettings(user.uid);
+        this.subscribeToGamification(user.uid);
     }
 
     stopUserSession() {
         if (this.unsubscribeHabits) this.unsubscribeHabits();
         if (this.unsubscribeSettings) this.unsubscribeSettings();
+        if (this.unsubscribeGamification) this.unsubscribeGamification();
         this.unsubscribeHabits = null;
         this.unsubscribeSettings = null;
+        this.unsubscribeGamification = null;
         this.habits = [];
+        this.gamification = { coins: 0, awardedHabits: {}, bonusActivities: {} };
         this.notifyHabits();
+        this.notifyGamification();
     }
 
     habitsRef(uid = this.user?.uid) {
@@ -133,6 +154,10 @@ class HabitModel {
         return doc(db, "users", uid, "settings", "app");
     }
 
+    gamificationRef(uid = this.user?.uid) {
+        return doc(db, "users", uid, "gamification", "data");
+    }
+
     listenHabits(uid) {
         if (this.unsubscribeHabits) this.unsubscribeHabits();
         const q = query(this.habitsRef(uid), orderBy("order"));
@@ -144,13 +169,25 @@ class HabitModel {
         });
     }
 
-    listenSettings(uid) {
+    subscribeToSettings(uid) {
         if (this.unsubscribeSettings) this.unsubscribeSettings();
         this.unsubscribeSettings = onSnapshot(this.settingsRef(uid), (snapshot) => {
             this.settings = { theme: "theme-dark", ...snapshot.data() };
             saveLocalSettings(this.settings);
             this.notifySettings();
         });
+    }
+
+    subscribeToGamification(uid) {
+        if (this.unsubscribeGamification) this.unsubscribeGamification();
+        this.unsubscribeGamification = onSnapshot(this.gamificationRef(uid), (snapshot) => {
+            this.gamification = { coins: 0, awardedHabits: {}, bonusActivities: {}, ...snapshot.data() };
+            this.notifyGamification();
+        });
+    }
+
+    getActivityDefs() {
+        return this.gamification.activityDefs || DEFAULT_ACTIVITIES;
     }
 
     async ensureUserSeeded(uid) {
@@ -178,11 +215,7 @@ class HabitModel {
 
     async addHabit(data) {
         if (!this.user) return;
-        const habit = normalizeHabit({
-            ...data,
-            order: this.habits.length,
-            history: []
-        });
+        const habit = normalizeHabit({ ...data, order: this.habits.length, history: [] });
         await addDoc(this.habitsRef(), serializeHabit(habit));
     }
 
@@ -202,6 +235,101 @@ class HabitModel {
             ? habit.history.filter((day) => day !== dateStr)
             : [...habit.history, dateStr].sort();
         await updateDoc(this.habitRef(id), { history, updatedAt: Date.now() });
+        if (!exists && dateStr === getDateString(new Date())) {
+            await this._awardHabitCoins(id, dateStr);
+        }
+    }
+
+    async _awardHabitCoins(habitId, dateStr) {
+        const awarded = this.gamification.awardedHabits || {};
+        const dayAwarded = awarded[dateStr] || [];
+        if (dayAwarded.includes(habitId)) return;
+        const habit = this.habits.find(h => h.id === habitId);
+        const coinAmount = habit?.coins || COINS_PER_HABIT;
+        await setDoc(this.gamificationRef(), {
+            coins: (this.gamification.coins || 0) + coinAmount,
+            awardedHabits: { ...awarded, [dateStr]: [...dayAwarded, habitId] }
+        }, { merge: true });
+    }
+
+    async toggleBonusActivity(date, activityId) {
+        if (!this.user) return;
+        const bonusActivities = this.gamification.bonusActivities || {};
+        const dayData = bonusActivities[date] || {};
+        const isDone = Boolean(dayData[activityId]);
+        const activity = this.getActivityDefs().find(a => a.id === activityId);
+        if (!activity) return;
+        const coins = Math.max(0, (this.gamification.coins || 0) + (isDone ? -activity.coins : activity.coins));
+        await setDoc(this.gamificationRef(), {
+            coins,
+            bonusActivities: { ...bonusActivities, [date]: { ...dayData, [activityId]: !isDone } }
+        }, { merge: true });
+    }
+
+    async addWater(date) {
+        if (!this.user) return;
+        const bonusActivities = this.gamification.bonusActivities || {};
+        const dayData = bonusActivities[date] || {};
+        const glasses = dayData.water500 || 0;
+        if (glasses >= WATER_GOAL_GLASSES) return;
+        await setDoc(this.gamificationRef(), {
+            coins: (this.gamification.coins || 0) + COINS_PER_WATER,
+            bonusActivities: { ...bonusActivities, [date]: { ...dayData, water500: glasses + 1 } }
+        }, { merge: true });
+    }
+
+    async removeWater(date) {
+        if (!this.user) return;
+        const bonusActivities = this.gamification.bonusActivities || {};
+        const dayData = bonusActivities[date] || {};
+        const glasses = dayData.water500 || 0;
+        if (glasses <= 0) return;
+        await setDoc(this.gamificationRef(), {
+            coins: Math.max(0, (this.gamification.coins || 0) - COINS_PER_WATER),
+            bonusActivities: { ...bonusActivities, [date]: { ...dayData, water500: glasses - 1 } }
+        }, { merge: true });
+    }
+
+    async purchaseItem(itemId, cost) {
+        if (!this.user) return false;
+        const coins = this.gamification.coins || 0;
+        if (coins < cost) return false;
+        await setDoc(this.gamificationRef(), { coins: coins - cost }, { merge: true });
+        return true;
+    }
+
+    async saveActivityDef(data) {
+        if (!this.user) return;
+        const existing = this.getActivityDefs();
+        const idx = existing.findIndex(a => a.id === data.id);
+        const updated = idx >= 0
+            ? existing.map((a, i) => i === idx ? { ...a, ...data } : a)
+            : [...existing, { ...data, id: data.id || createId() }];
+        await setDoc(this.gamificationRef(), { activityDefs: updated }, { merge: true });
+    }
+
+    async deleteActivityDef(id) {
+        if (!this.user) return;
+        const updated = this.getActivityDefs().filter(a => a.id !== id);
+        await setDoc(this.gamificationRef(), { activityDefs: updated }, { merge: true });
+    }
+
+    async saveCustomReward(data) {
+        if (!this.user) return;
+        const existing = this.gamification.customRewards || [];
+        const idx = existing.findIndex(r => r.id === data.id);
+        const updated = idx >= 0
+            ? existing.map((r, i) => i === idx ? { ...r, ...data } : r)
+            : [...existing, { ...data, id: data.id || createId() }];
+        await setDoc(this.gamificationRef(), { customRewards: updated }, { merge: true });
+    }
+
+    async deleteCustomReward(id) {
+        if (!this.user) return;
+        const existing = this.gamification.customRewards || [];
+        await setDoc(this.gamificationRef(), {
+            customRewards: existing.filter(r => r.id !== id)
+        }, { merge: true });
     }
 
     async delete(id) {
@@ -225,7 +353,6 @@ class HabitModel {
         const index = sorted.findIndex((habit) => habit.id === id);
         const nextIndex = index + direction;
         if (index < 0 || nextIndex < 0 || nextIndex >= sorted.length) return;
-
         [sorted[index], sorted[nextIndex]] = [sorted[nextIndex], sorted[index]];
         const batch = writeBatch(db);
         sorted.forEach((habit, order) => {
@@ -251,12 +378,21 @@ class HabitModel {
         callback(this.settings);
     }
 
+    onGamification(callback) {
+        this.gamificationListeners.push(callback);
+        callback(this.gamification);
+    }
+
     notifyHabits() {
-        this.habitListeners.forEach((callback) => callback(this.habits));
+        this.habitListeners.forEach((cb) => cb(this.habits));
     }
 
     notifySettings() {
-        this.settingsListeners.forEach((callback) => callback(this.settings));
+        this.settingsListeners.forEach((cb) => cb(this.settings));
+    }
+
+    notifyGamification() {
+        this.gamificationListeners.forEach((cb) => cb(this.gamification));
     }
 }
 
@@ -495,13 +631,127 @@ class HabitView {
         };
     }
 
+    renderShop(gamification, handlers, today) {
+        const shopView = document.getElementById("view-shop");
+        if (!shopView) return;
+        const coins = gamification.coins || 0;
+        const bonusData = (gamification.bonusActivities || {})[today] || {};
+        const water = bonusData.water500 || 0;
+        const waterMl = water * 500;
+        const waterPercent = Math.round((water / WATER_GOAL_GLASSES) * 100);
+        const activityDefs = gamification.activityDefs || DEFAULT_ACTIVITIES;
+        const customRewards = gamification.customRewards || [];
+        const allRewards = [
+            ...SHOP_ITEMS.map(item => ({ ...item, isBuiltIn: true })),
+            ...customRewards.map(item => ({ ...item, isBuiltIn: false }))
+        ];
+
+        shopView.innerHTML = `
+            <div class="coin-balance-card">
+                <span class="coin-icon">⬡</span>
+                <div class="coin-info">
+                    <strong class="coin-amount">${coins}</strong>
+                    <span class="coin-label">монет</span>
+                </div>
+            </div>
+
+            <div class="shop-section">
+                <p class="shop-section-title">Бонусные активности</p>
+                <div class="bonus-list">
+                    ${activityDefs.map(a => {
+                        const done = Boolean(bonusData[a.id]);
+                        return `
+                        <article class="bonus-card${done ? " bonus-done" : ""}">
+                            <span class="bonus-card-icon">${escapeHtml(a.icon)}</span>
+                            <div class="bonus-card-info">
+                                <strong>${escapeHtml(a.name)}</strong>
+                                <span>${done ? "Выполнено" : `+${a.coins} ⬡`}</span>
+                            </div>
+                            <button class="card-edit-btn" data-edit-activity="${a.id}" type="button" title="Редактировать">✎</button>
+                            <button class="bonus-toggle" data-activity="${a.id}" type="button">${done ? "✓" : "○"}</button>
+                        </article>`;
+                    }).join("")}
+                </div>
+                <button class="add-item-btn" id="add-activity-btn" type="button">+ Добавить активность</button>
+            </div>
+
+            <div class="shop-section">
+                <p class="shop-section-title">Трекер воды</p>
+                <div class="water-card">
+                    <div class="water-status">
+                        <span class="water-amount">${waterMl} мл</span>
+                        <span class="water-goal-label">/ ${WATER_GOAL_GLASSES * 500} мл</span>
+                        <span class="water-earned">+${water * COINS_PER_WATER} ⬡</span>
+                    </div>
+                    <div class="water-track">
+                        <div class="water-fill" style="width: ${waterPercent}%"></div>
+                    </div>
+                    <div class="water-controls">
+                        <button class="water-btn" id="water-minus" type="button"${water <= 0 ? " disabled" : ""}>−</button>
+                        <div class="water-glasses">
+                            ${Array.from({ length: WATER_GOAL_GLASSES }, (_, i) =>
+                                `<span class="water-glass${i < water ? " filled" : ""}">◉</span>`
+                            ).join("")}
+                        </div>
+                        <button class="water-btn" id="water-plus" type="button"${water >= WATER_GOAL_GLASSES ? " disabled" : ""}>+</button>
+                    </div>
+                    <p class="water-hint">Каждые 500 мл = ${COINS_PER_WATER} ⬡</p>
+                </div>
+            </div>
+
+            <div class="shop-section">
+                <p class="shop-section-title">Магазин наград</p>
+                <div class="reward-list">
+                    ${allRewards.map(item => {
+                        const canAfford = coins >= item.cost;
+                        return `
+                        <article class="reward-card${!canAfford ? " reward-locked" : ""}">
+                            <span class="reward-icon">${item.icon}</span>
+                            <div class="reward-info">
+                                <strong>${escapeHtml(item.name)}</strong>
+                                <span class="reward-cost">${item.cost} ⬡</span>
+                            </div>
+                            <button class="card-edit-btn${item.isBuiltIn ? " invisible" : ""}" data-edit-reward="${item.id}" type="button" title="Редактировать">✎</button>
+                            <button class="reward-buy" data-item="${item.id}" data-cost="${item.cost}" type="button"${!canAfford ? " disabled" : ""}>Купить</button>
+                        </article>`;
+                    }).join("")}
+                </div>
+                <button class="add-item-btn" id="add-reward-btn" type="button">+ Добавить награду</button>
+            </div>
+        `;
+
+        shopView.querySelectorAll(".bonus-toggle").forEach(btn => {
+            btn.onclick = () => handlers.toggleBonus(today, btn.dataset.activity);
+        });
+        shopView.querySelectorAll("[data-edit-activity]").forEach(btn => {
+            btn.onclick = () => handlers.editActivity(btn.dataset.editActivity);
+        });
+        shopView.querySelectorAll("[data-edit-reward]").forEach(btn => {
+            if (!btn.classList.contains("invisible")) {
+                btn.onclick = () => handlers.editReward(btn.dataset.editReward);
+            }
+        });
+        const minus = shopView.querySelector("#water-minus");
+        const plus = shopView.querySelector("#water-plus");
+        if (minus) minus.onclick = () => handlers.removeWater(today);
+        if (plus) plus.onclick = () => handlers.addWater(today);
+        shopView.querySelectorAll(".reward-buy:not(:disabled)").forEach(btn => {
+            btn.onclick = () => handlers.purchase(btn.dataset.item, Number(btn.dataset.cost));
+        });
+        const addActivityBtn = shopView.querySelector("#add-activity-btn");
+        if (addActivityBtn) addActivityBtn.onclick = () => handlers.addActivity();
+        const addRewardBtn = shopView.querySelector("#add-reward-btn");
+        if (addRewardBtn) addRewardBtn.onclick = () => handlers.addReward();
+    }
+
     setTitle(tab) {
         const titles = {
             today: ["Сегодня", "Habits"],
             week: ["7 дней", "Weekly"],
             month: ["Обзор", "Overall"],
             analytics: ["Графики", "Analytics"],
-            detail: ["Привычка", "Details"]
+            detail: ["Привычка", "Details"],
+            shop: ["Магазин", "Rewards"]
         };
         const [eyebrow, title] = titles[tab] || titles.today;
         this.screenEyebrow.textContent = eyebrow;
@@ -514,10 +764,13 @@ class HabitPresenter {
         this.model = model;
         this.view = view;
         this.lastData = [];
+        this.lastGamification = { coins: 0, awardedHabits: {}, bonusActivities: {} };
         this.activeTab = "today";
         this.editingId = null;
         this.detailId = null;
         this.reminderTimer = null;
+        this.editingRewardId = null;
+        this.editingActivityId = null;
         this.init();
     }
 
@@ -533,6 +786,13 @@ class HabitPresenter {
         this.model.listenSettings((settings) => {
             document.body.className = settings.theme || "theme-dark";
             this.updateThemePicker(settings.theme || "theme-dark");
+        });
+        this.model.onGamification((gamification) => {
+            this.lastGamification = gamification;
+            this.updateCoinBadge(gamification.coins || 0);
+            if (this.activeTab === "shop") {
+                this.view.renderShop(gamification, this.shopHandlers(), getDateString(new Date()));
+            }
         });
         this.model.onAuth((user) => this.renderAuthState(user));
 
@@ -554,6 +814,25 @@ class HabitPresenter {
             else this.model.addHabit(data);
             this.closeSheet();
         };
+
+        document.getElementById("close-reward-sheet").onclick = () => this.closeRewardSheet();
+        document.getElementById("save-reward-btn").onclick = () => this.saveReward();
+        document.getElementById("delete-reward-btn").onclick = () => {
+            if (this.editingRewardId && confirm("Удалить награду?")) {
+                this.model.deleteCustomReward(this.editingRewardId);
+                this.closeRewardSheet();
+            }
+        };
+
+        document.getElementById("close-activity-sheet").onclick = () => this.closeActivitySheet();
+        document.getElementById("save-activity-btn").onclick = () => this.saveActivity();
+        document.getElementById("delete-activity-btn").onclick = () => {
+            if (this.editingActivityId && confirm("Удалить активность?")) {
+                this.model.deleteActivityDef(this.editingActivityId);
+                this.closeActivitySheet();
+            }
+        };
+
         document.querySelectorAll(".nav-btn").forEach((btn) => {
             btn.onclick = () => this.switchTab(btn.dataset.tab);
         });
@@ -612,7 +891,8 @@ class HabitPresenter {
     switchTab(tab) {
         this.activeTab = tab;
         document.querySelectorAll(".view").forEach((view) => view.classList.add("hidden"));
-        document.getElementById(`view-${tab}`).classList.remove("hidden");
+        const viewEl = document.getElementById(`view-${tab}`);
+        if (viewEl) viewEl.classList.remove("hidden");
         document.querySelectorAll(".nav-btn").forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
         this.view.setTitle(tab);
         this.updateUI();
@@ -635,6 +915,7 @@ class HabitPresenter {
         document.getElementById("habit-name").value = habit?.name || "";
         document.getElementById("reminder-enabled").checked = Boolean(habit?.reminder?.enabled);
         document.getElementById("reminder-time").value = habit?.reminder?.time || "19:00";
+        document.getElementById("habit-coins").value = habit?.coins || COINS_PER_HABIT;
         setPickerValue("icon-picker", "icon", habit?.icon || ICONS[0]);
         setPickerValue("color-picker", "color", habit?.color || COLORS[this.lastData.length % COLORS.length]);
         setWeekdays(habit?.repeatDays || [1, 2, 3, 4, 5, 6, 0]);
@@ -659,9 +940,79 @@ class HabitPresenter {
         this.hideBackdropIfDone();
     }
 
+    openRewardSheet(id = null) {
+        this.editingRewardId = id;
+        const allCustom = this.lastGamification.customRewards || [];
+        const reward = allCustom.find(r => r.id === id);
+        document.getElementById("reward-sheet-title").textContent = reward ? "Редактировать награду" : "Новая награда";
+        document.getElementById("reward-name").value = reward?.name || "";
+        document.getElementById("reward-icon").value = reward?.icon || "";
+        document.getElementById("reward-cost").value = reward?.cost || "";
+        document.getElementById("delete-reward-btn").classList.toggle("hidden", !reward);
+        this.showBackdrop();
+        document.getElementById("reward-sheet").classList.remove("hidden");
+        document.getElementById("reward-name").focus();
+    }
+
+    closeRewardSheet() {
+        document.getElementById("reward-sheet").classList.add("hidden");
+        this.editingRewardId = null;
+        this.hideBackdropIfDone();
+    }
+
+    saveReward() {
+        const name = document.getElementById("reward-name").value.trim();
+        const icon = document.getElementById("reward-icon").value.trim() || "◆";
+        const cost = parseInt(document.getElementById("reward-cost").value) || 50;
+        if (!name) return;
+        this.model.saveCustomReward({
+            id: this.editingRewardId || createId(),
+            name,
+            icon,
+            cost: Math.max(1, cost)
+        });
+        this.closeRewardSheet();
+    }
+
+    openActivitySheet(id = null) {
+        this.editingActivityId = id;
+        const activityDefs = this.model.getActivityDefs();
+        const activity = activityDefs.find(a => a.id === id);
+        document.getElementById("activity-sheet-title").textContent = activity ? "Редактировать активность" : "Новая активность";
+        document.getElementById("activity-name").value = activity?.name || "";
+        document.getElementById("activity-icon").value = activity?.icon || "";
+        document.getElementById("activity-coins").value = activity?.coins || 20;
+        document.getElementById("delete-activity-btn").classList.toggle("hidden", !activity);
+        this.showBackdrop();
+        document.getElementById("activity-sheet").classList.remove("hidden");
+        document.getElementById("activity-name").focus();
+    }
+
+    closeActivitySheet() {
+        document.getElementById("activity-sheet").classList.add("hidden");
+        this.editingActivityId = null;
+        this.hideBackdropIfDone();
+    }
+
+    saveActivity() {
+        const name = document.getElementById("activity-name").value.trim();
+        const icon = document.getElementById("activity-icon").value.trim() || "◆";
+        const coins = parseInt(document.getElementById("activity-coins").value) || 20;
+        if (!name) return;
+        this.model.saveActivityDef({
+            id: this.editingActivityId || createId(),
+            name,
+            icon,
+            coins: Math.max(1, coins)
+        });
+        this.closeActivitySheet();
+    }
+
     closeAllSheets() {
         document.getElementById("habit-sheet").classList.add("hidden");
         document.getElementById("settings-panel").classList.add("hidden");
+        document.getElementById("reward-sheet").classList.add("hidden");
+        document.getElementById("activity-sheet").classList.add("hidden");
         document.getElementById("sheet-backdrop").classList.add("hidden");
     }
 
@@ -670,9 +1021,9 @@ class HabitPresenter {
     }
 
     hideBackdropIfDone() {
-        const habitSheetHidden = document.getElementById("habit-sheet").classList.contains("hidden");
-        const settingsHidden = document.getElementById("settings-panel").classList.contains("hidden");
-        if (habitSheetHidden && settingsHidden) document.getElementById("sheet-backdrop").classList.add("hidden");
+        const hidden = ["habit-sheet", "settings-panel", "reward-sheet", "activity-sheet"]
+            .every(id => document.getElementById(id).classList.contains("hidden"));
+        if (hidden) document.getElementById("sheet-backdrop").classList.add("hidden");
     }
 
     readForm() {
@@ -682,6 +1033,7 @@ class HabitPresenter {
             icon: document.querySelector("#icon-picker .selected")?.dataset.icon || ICONS[0],
             color: document.querySelector("#color-picker .selected")?.dataset.color || COLORS[0],
             repeatDays: repeatDays.length ? repeatDays : [1, 2, 3, 4, 5, 6, 0],
+            coins: Math.max(1, parseInt(document.getElementById("habit-coins").value) || COINS_PER_HABIT),
             reminder: {
                 enabled: document.getElementById("reminder-enabled").checked,
                 time: document.getElementById("reminder-time").value || "19:00"
@@ -703,12 +1055,53 @@ class HabitPresenter {
         };
     }
 
+    shopHandlers() {
+        return {
+            toggleBonus: (date, activityId) => this.model.toggleBonusActivity(date, activityId),
+            addWater: (date) => this.model.addWater(date),
+            removeWater: (date) => this.model.removeWater(date),
+            purchase: async (itemId, cost) => {
+                const ok = await this.model.purchaseItem(itemId, cost);
+                if (ok) {
+                    const allRewards = [
+                        ...SHOP_ITEMS,
+                        ...(this.lastGamification.customRewards || [])
+                    ];
+                    const item = allRewards.find(i => i.id === itemId);
+                    if (item) this.showToast(`✓ Куплено: ${item.name}`);
+                }
+            },
+            editReward: (id) => this.openRewardSheet(id),
+            addReward: () => this.openRewardSheet(),
+            editActivity: (id) => this.openActivitySheet(id),
+            addActivity: () => this.openActivitySheet()
+        };
+    }
+
+    updateCoinBadge(coins) {
+        const badge = document.getElementById("coin-badge");
+        if (badge) badge.textContent = `⬡ ${coins}`;
+    }
+
+    showToast(message) {
+        const existing = document.querySelector(".purchase-toast");
+        if (existing) existing.remove();
+        const toast = document.createElement("div");
+        toast.className = "purchase-toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+    }
+
     updateUI() {
         this.view.renderProgress(this.lastData);
         this.view.renderToday(this.lastData, this.handlers());
         this.view.renderWeek(this.lastData, this.handlers());
         this.view.renderOverall(this.lastData);
         if (this.activeTab === "analytics") this.view.renderAnalytics(this.lastData);
+        if (this.activeTab === "shop") {
+            this.view.renderShop(this.lastGamification, this.shopHandlers(), getDateString(new Date()));
+        }
         if (this.activeTab === "detail") {
             const habit = this.lastData.find((item) => item.id === this.detailId);
             if (habit) this.view.renderDetail(habit, this.handlers());
@@ -780,6 +1173,7 @@ function normalizeHabit(habit) {
         repeatDays: Array.isArray(habit.repeatDays) && habit.repeatDays.length ? habit.repeatDays : [1, 2, 3, 4, 5, 6, 0],
         reminder: habit.reminder || { enabled: false, time: "19:00" },
         lastReminderDate: habit.lastReminderDate || "",
+        coins: Number.isFinite(habit.coins) && habit.coins > 0 ? Math.round(habit.coins) : COINS_PER_HABIT,
         history: Array.isArray(habit.history) ? [...new Set(habit.history)].sort() : [],
         createdAt: habit.createdAt || Date.now(),
         updatedAt: habit.updatedAt || Date.now()
@@ -796,6 +1190,7 @@ function serializeHabit(habit) {
         repeatDays: normalized.repeatDays,
         reminder: normalized.reminder,
         lastReminderDate: normalized.lastReminderDate,
+        coins: normalized.coins,
         history: normalized.history,
         createdAt: normalized.createdAt,
         updatedAt: Date.now()
@@ -881,10 +1276,11 @@ function shortWeekday(date) {
 }
 
 function habitSubtitle(habit, isDone, isDue) {
+    const coinAmt = habit.coins || COINS_PER_HABIT;
     if (isDone) return "Done today";
     if (!isDue) return "Rest day";
-    if (habit.reminder?.enabled) return `Reminder ${habit.reminder.time}`;
-    return "Tap to complete";
+    if (habit.reminder?.enabled) return `Reminder ${habit.reminder.time} · +${coinAmt} ⬡`;
+    return `+${coinAmt} ⬡`;
 }
 
 function repeatLabel(days) {

@@ -26,6 +26,7 @@
     <header class="top-bar">
         <button class="icon-btn" id="settings-btn" aria-label="Настройки" title="Настройки">☷</button>
         <div class="top-actions">
+            <span class="coin-badge" id="coin-badge">⬡ 0</span>
             <button class="icon-btn" id="theme-toggle" aria-label="Сменить тему" title="Сменить тему">◐</button>
             <button class="icon-btn add-fab" id="show-add-btn" aria-label="Добавить привычку" title="Добавить привычку">+</button>
         </div>
@@ -102,6 +103,7 @@
         </div>
 
         <div id="view-detail" class="view hidden"></div>
+        <div id="view-shop" class="view hidden"></div>
     </section>
 
     <nav class="bottom-nav" aria-label="Разделы">
@@ -109,6 +111,7 @@
         <button class="nav-btn" data-tab="week" aria-label="Неделя">▥<span>Week</span></button>
         <button class="nav-btn" data-tab="analytics" aria-label="Аналитика">▮<span>Analytics</span></button>
         <button class="nav-btn" data-tab="month" aria-label="Обзор">▦<span>Overall</span></button>
+        <button class="nav-btn" data-tab="shop" aria-label="Магазин">⬡<span>Shop</span></button>
     </nav>
 </main>
 
@@ -140,6 +143,12 @@
         </label>
         <input type="time" id="reminder-time" value="19:00">
 
+        <label class="field-label" for="habit-coins">Монет за выполнение</label>
+        <div class="coins-input-row">
+            <input type="number" id="habit-coins" min="1" max="999" value="10">
+            <span class="coins-input-unit">⬡</span>
+        </div>
+
         <button class="btn-primary" type="submit" id="save-habit-btn">Сохранить</button>
     </form>
 </section>
@@ -160,6 +169,44 @@
     <button class="btn-secondary" type="button" id="test-reminder">Проверить уведомление</button>
     <button class="btn-danger" type="button" id="logout-btn">Выйти из аккаунта</button>
     <p class="settings-note" id="notification-status">Уведомления работают, пока приложение открыто.</p>
+</section>
+
+<section class="bottom-sheet hidden" id="reward-sheet" aria-label="Награда">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+        <h2 id="reward-sheet-title">Новая награда</h2>
+        <button class="plain-btn" type="button" id="close-reward-sheet">Закрыть</button>
+    </div>
+    <label class="field-label" for="reward-name">Название</label>
+    <input type="text" id="reward-name" placeholder="Например, Кино" autocomplete="off">
+    <label class="field-label" for="reward-icon">Иконка (символ или эмодзи)</label>
+    <input type="text" id="reward-icon" placeholder="🎬" maxlength="4">
+    <label class="field-label" for="reward-cost">Цена (монеты)</label>
+    <div class="coins-input-row">
+        <input type="number" id="reward-cost" min="1" max="9999" placeholder="100">
+        <span class="coins-input-unit">⬡</span>
+    </div>
+    <button class="btn-primary" type="button" id="save-reward-btn">Сохранить</button>
+    <button class="btn-danger hidden" type="button" id="delete-reward-btn">Удалить награду</button>
+</section>
+
+<section class="bottom-sheet hidden" id="activity-sheet" aria-label="Активность">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+        <h2 id="activity-sheet-title">Новая активность</h2>
+        <button class="plain-btn" type="button" id="close-activity-sheet">Закрыть</button>
+    </div>
+    <label class="field-label" for="activity-name">Название</label>
+    <input type="text" id="activity-name" placeholder="Например, Планка 1 мин" autocomplete="off">
+    <label class="field-label" for="activity-icon">Иконка (символ или эмодзи)</label>
+    <input type="text" id="activity-icon" placeholder="◆" maxlength="4">
+    <label class="field-label" for="activity-coins">Монет за выполнение</label>
+    <div class="coins-input-row">
+        <input type="number" id="activity-coins" min="1" max="999" placeholder="20">
+        <span class="coins-input-unit">⬡</span>
+    </div>
+    <button class="btn-primary" type="button" id="save-activity-btn">Сохранить</button>
+    <button class="btn-danger hidden" type="button" id="delete-activity-btn">Удалить активность</button>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
